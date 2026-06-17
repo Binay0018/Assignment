@@ -1,8 +1,6 @@
-// src/components/ActivityFeed.jsx
 import { useState, useEffect, useCallback, useRef } from 'react';
 import ActivityCard from './ActivityCard';
 
-// ─── API helper ───────────────────────────────────────────
 const fetchActivities = async (cursor, filter) => {
   const params = new URLSearchParams({ limit: 20 });
   if (cursor) params.append('cursor', cursor);
@@ -16,21 +14,17 @@ const fetchActivities = async (cursor, filter) => {
   return res.json();
 };
 
-
-// ─── Main component ───────────────────────────────────────
 export default function ActivityFeed() {
 
   const [activities, setActivities] = useState([]);
-  const [cursor, setCursor]         = useState(null);
-  const [loading, setLoading]       = useState(false);
-  const [hasMore, setHasMore]       = useState(true);
-  const [filter, setFilter]         = useState('');
+  const [cursor, setCursor] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [filter, setFilter] = useState('');
 
-  const bottomRef   = useRef(null);
+  const bottomRef = useRef(null);
   const observerRef = useRef(null);
 
-
-  // ─── loadMore ────────────────────────────────────────────
   const loadMore = useCallback(async (currentCursor, currentFilter) => {
     if (loading || !hasMore) return;
 
@@ -56,25 +50,17 @@ export default function ActivityFeed() {
     }
   }, [loading, hasMore]);
 
-
-  // ─── Optimistic UI — create activity ─────────────────────
   const createActivity = async (newActivityData) => {
-
-    // STEP 1: Make a fake temporary item with a temp ID
     const tempActivity = {
-      _id: `temp-${Date.now()}`,  // unique fake ID
+      _id: `temp-${Date.now()}`,
       ...newActivityData,
       createdAt: new Date().toISOString(),
-      isPending: true             // flag = "not saved yet"
+      isPending: true
     };
 
-    // STEP 2: Add it to the top of the list IMMEDIATELY
-    // User sees it right away before the API even responds
     setActivities(prev => [tempActivity, ...prev]);
 
- 
     try {
-      // STEP 3: Call the real API in background
       const res = await fetch('/api/activities', {
         method: 'POST',
         headers: {
@@ -88,8 +74,6 @@ export default function ActivityFeed() {
 
       const { data: savedActivity } = await res.json();
 
-      // STEP 4 (success): Swap fake item with real saved document
-      // Find by the temp ID and replace it
       if (savedActivity && savedActivity._id) {
         setActivities(prev =>
           prev.map(activity =>
@@ -97,15 +81,13 @@ export default function ActivityFeed() {
           )
         );
       } else {
-        // If savedActivity is invalid, remove the temp one
+
         setActivities(prev =>
           prev.filter(activity => activity._id !== tempActivity._id)
         );
       }
 
     } catch (error) {
-      // STEP 5 (failure): ROLLBACK — remove the fake item
-      // Act like it never happened
       setActivities(prev =>
         prev.filter(activity => activity._id !== tempActivity._id)
       );
@@ -114,8 +96,6 @@ export default function ActivityFeed() {
     }
   };
 
-
-  // ─── useEffect #1 — Load on mount, reset on filter change ─
   useEffect(() => {
     setActivities([]);
     setCursor(null);
@@ -123,8 +103,6 @@ export default function ActivityFeed() {
     loadMore(null, filter);
   }, [filter]);
 
-
-  // ─── useEffect #2 — Infinite scroll ──────────────────────
   useEffect(() => {
     if (!bottomRef.current) return;
 
@@ -143,8 +121,6 @@ export default function ActivityFeed() {
 
   }, [cursor, hasMore, loading, filter, loadMore]);
 
-
-  // ─── useEffect #3 — Real-time polling every 10 seconds ───
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
@@ -162,13 +138,10 @@ export default function ActivityFeed() {
     return () => clearInterval(interval);
   }, [filter]);
 
-console.log("Activities:", activities);
-  // ─── RENDER ──────────────────────────────────────────────
   return (
     <div style={{ maxWidth: '600px', margin: '0 auto', padding: '16px' }}>
       <h2>Activity Feed</h2>
 
-      {/* ── Post Activity button (Optimistic UI) ── */}
       <div style={{
         marginBottom: '20px',
         padding: '12px 16px',
@@ -206,7 +179,6 @@ console.log("Activities:", activities);
         ))}
       </div>
 
-      {/* ── Filter buttons ── */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
         {['', 'like', 'comment', 'share'].map(type => (
           <button
@@ -226,7 +198,6 @@ console.log("Activities:", activities);
         ))}
       </div>
 
-      {/* ── Activity list ── */}
       {activities
   .filter(activity => activity && typeof activity === 'object' && activity._id)
   .map(activity => {
@@ -248,19 +219,16 @@ console.log("Activities:", activities);
         </div>
       )}
 
-      {/* ── Loading spinner ── */}
       {loading && (
         <p style={{ textAlign: 'center', color: '#888' }}>Loading...</p>
       )}
 
-      {/* ── End of list ── */}
       {!hasMore && activities.length > 0 && (
         <p style={{ textAlign: 'center', color: '#aaa', fontSize: '13px' }}>
           You have seen all activities.
         </p>
       )}
 
-      {/* ── Invisible bottom div for IntersectionObserver ── */}
       <div ref={bottomRef} style={{ height: '1px' }} />
     </div>
   );
