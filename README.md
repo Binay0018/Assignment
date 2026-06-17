@@ -95,7 +95,7 @@ npm run dev
 npm start
 ```
 
-Backend runs on `http://localhost:3000` (or configured port)
+Backend runs on `http://localhost:5000` by default
 
 ### Frontend Setup
 
@@ -105,7 +105,7 @@ cd frontend
 # Install dependencies
 npm install
 
-# Start development server
+# Start development server (with API proxy to :5000)
 npm run dev
 ```
 
@@ -113,54 +113,76 @@ Frontend runs on `http://localhost:5173`
 
 ## 🔌 API Endpoints
 
-### Activities
+### GET /api/activities
 
-#### Get Activities (with Pagination)
+Fetch activities with cursor-based pagination:
 
-```http
-GET /api/activities?limit=20&cursor=<nextCursor>&type=<filter>
-Headers:
-  x-tenant-id: company-abc
+```bash
+curl "http://localhost:5000/api/activities?limit=20&cursor=2026-06-17T08:51:17.000Z" \
+  -H "x-tenant-id: company-abc"
 ```
 
-#### Create Activity
+**Response (200):**
 
-```http
-POST /api/activities
-Headers:
-  Content-Type: application/json
-  x-tenant-id: company-abc
-
-Body:
+```json
 {
-  "actorId": "user-001",
-  "actorName": "John Doe",
-  "type": "like",
-  "entityId": "post-123",
-  "metadata": {}
+  "data": [
+    {
+      "_id": "6a32008e60d77f87f0a1670a",
+      "tenantId": "company-abc",
+      "actorId": "user-001",
+      "actorName": "Binay Kumar",
+      "type": "share",
+      "entityId": "post-1781666476994",
+      "createdAt": "2026-06-17T08:51:17.000Z"
+    }
+  ],
+  "nextCursor": "2026-06-17T08:51:16.000Z"
+}
+```
+
+### POST /api/activities
+
+Create activity (asynchronously via BullMQ queue):
+
+```bash
+curl -X POST "http://localhost:5000/api/activities" \
+  -H "Content-Type: application/json" \
+  -H "x-tenant-id: company-abc" \
+  -H "x-idempotency-key: unique-uuid" \
+  -d '{
+    "actorId": "user-001",
+    "actorName": "Binay Kumar",
+    "type": "like",
+    "entityId": "post-123",
+    "metadata": {}
+  }'
+```
+
+**Response (202 Accepted):**
+
+```json
+{
+  "message": "Activity queued successfully",
+  "status": "processing"
 }
 ```
 
 ## 🔄 How It Works
 
-### Frontend Flow
+### Frontend Architecture
 
-1. **Load Activities**: Initial load fetches 20 activities with pagination cursor
-2. **Infinite Scroll**: When user scrolls to bottom, next page is automatically fetched
-3. **Real-time Polling**: Every 10 seconds, new activities are fetched and prepended
-4. **Create Activity**:
-   - Optimistic UI shows activity immediately
-   - API call sent in background
-   - On success: Replace with server response
-   - On failure: Rollback and show error
+1. **Infinite Scroll** - Uses Intersection Observer to detect scroll to bottom, fetches next page with cursor
+2. **Real-time Polling** - Every 10s polls for new activities, deduplicates by `_id`
+3. **Optimistic UI** - Shows temp activity instantly, replaces with real one after polling detects it
+4. **Duplicate Prevention** - Tracks `_id` set to prevent duplicates across pagination and polling
 
-### Backend Flow
+### Backend Architecture
 
-1. **API Request**: Express receives request with tenant ID
-2. **Database Query**: MongoDB returns activities with cursor
-3. **Queue Job**: Activity creation triggers background job via BullMQ
-4. **Worker Processing**: Worker processes job asynchronously
-5. **Response**: API returns activity with new ID and timestamp
+1. **API Validation** - Check `x-tenant-id` header and request body
+2. **Queue Job** - Add to BullMQ Redis queue, return 202 immediately
+3. **Background Worker** - Listen for jobs, save to MongoDB, retry 3x with backoff
+4. **Pagination Query** - Index `{tenantId, createdAt DESC}` for fast cursor pagination
 
 ## 🛠️ Technology Stack
 
@@ -183,22 +205,22 @@ Body:
 ### Environment Variables (Backend)
 
 ```env
-# Database
-DATABASE_URL=mongodb://localhost:27017/assignment
+# Database MongoDB
+MONGO_URI=mongodb://localhost:27017/assignment
 
-# Redis
+# Redis for BullMQ queue
 REDIS_URL=redis://localhost:6379
 
 # Server
-PORT=3000
+PORT=5000
 NODE_ENV=development
 ```
 
 ### Environment Variables (Frontend)
 
 ```env
-# Backend API
-VITE_API_URL=http://localhost:3000
+# Backend API URL
+VITE_API_URL=http://localhost:5000
 
 # Tenant ID
 VITE_TENANT_ID=company-abc
