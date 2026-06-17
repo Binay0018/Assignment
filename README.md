@@ -27,6 +27,12 @@ A production-ready, full-stack real-time activity feed system featuring cursor-b
 - 📝 **Job Persistence** - Keep last 100 completed and 500 failed jobs for debugging
 - ✅ **202 Accepted** - Return immediately while job processes in background
 
+## 📸 Screenshots
+
+### Activity Feed Demo
+
+![Activity Feed Demo](./frontend/public/screenshots/activity-feed-demo.png)
+
 ## 🏗️ Architecture
 
 ### Data Flow Diagram
